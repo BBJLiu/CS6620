@@ -1,0 +1,273 @@
+import json
+import boto3
+
+# Create an IAM client
+iam = boto3.client('iam')
+
+# Create Dev Role
+dev_policy_document = {
+    'Version': '2012-10-17',
+    'Statement': [
+        {
+            'Effect': 'Allow',
+            'Principal': {'Service': 'ec2.amazonaws.com'},
+            'Action': 'sts:AssumeRole'
+        }
+    ]
+}
+
+response_dev = iam.create_role(
+    RoleName='Dev',
+    AssumeRolePolicyDocument=json.dumps(dev_policy_document),
+    Description='Dev role with full access to S3'
+)
+
+# Attach Full S3 Access Policy to Dev Role
+iam.attach_role_policy(
+    RoleName='Dev',
+    PolicyArn='arn:aws:iam::aws:policy/AmazonS3FullAccess'
+)
+
+# Create User Role
+user_policy_document = {
+    'Version': '2012-10-17',
+    'Statement': [
+        {
+            'Effect': 'Allow',
+            'Principal': {'Service': 'ec2.amazonaws.com'},
+            'Action': 'sts:AssumeRole'
+        }
+    ]
+}
+
+response_user = iam.create_role(
+    RoleName='User',
+    AssumeRolePolicyDocument=json.dumps(user_policy_document),
+    Description='User role with restricted S3 access'
+)
+
+# Attach S3 List/Get Policy to User Role
+s3_list_get_policy = {
+    'Version': '2012-10-17',
+    'Statement': [
+        {
+            'Effect': 'Allow',
+            'Action': ['s3:ListBucket', 's3:GetObject'],
+            'Resource': '*'
+        }
+    ]
+}
+
+# Create a new policy and attach it to the User role
+response_policy = iam.create_policy(
+    PolicyName='S3ListGetPolicy',
+    PolicyDocument=json.dumps(s3_list_get_policy)
+)
+
+iam.attach_role_policy(
+    RoleName='User',
+    PolicyArn=response_policy['Policy']['Arn']
+)
+
+# Create an IAM user
+user_response = iam.create_user(UserName='TestIAMUser')
+
+# Attach necessary policies for assuming roles later
+iam.attach_user_policy(
+    UserName='TestIAMUser',
+    PolicyArn='arn:aws:iam::aws:policy/IAMFullAccess'
+)
+
+# Create access key for the user
+access_key_response = iam.create_access_key(UserName='TestIAMUser')
+
+# Print Access Key ID and Secret Access Key
+access_key_id = access_key_response['AccessKey']['AccessKeyId']
+secret_access_key = access_key_response['AccessKey']['SecretAccessKey']
+
+
+
+# Update the trust policy of the 'Dev' role to allow 'TestIAMUser' to assume the role
+dev_trust_policy_update = {
+    'Version': '2012-10-17',
+    'Statement': [
+        {
+            'Effect': 'Allow',
+            'Principal': {
+                'AWS': f'arn:aws:iam::888577057759:user/TestIAMUser'
+            },
+            'Action': 'sts:AssumeRole'
+        }
+    ]
+}
+
+iam.update_assume_role_policy(
+    RoleName='Dev',
+    PolicyDocument=json.dumps(dev_trust_policy_update)
+)
+
+# Attach an inline policy to 'TestIAMUser' that allows assuming the 'Dev' role
+user_assume_role_policy = {
+    'Version': '2012-10-17',
+    'Statement': [
+        {
+            'Effect': 'Allow',
+            'Action': 'sts:AssumeRole',
+            'Resource': f'arn:aws:iam::888577057759:role/Dev'
+        }
+    ]
+}
+
+iam.put_user_policy(
+    UserName='TestIAMUser',
+    PolicyName='AllowAssumeDevRole',
+    PolicyDocument=json.dumps(user_assume_role_policy)
+)
+
+# Initialize session with the IAM user credentials
+session = boto3.Session(
+    aws_access_key_id=access_key_id,
+    aws_secret_access_key=secret_access_key,
+    region_name='us-west-2'
+)
+
+# Create an STS client using the IAM user's session
+sts_client = session.client('sts')
+
+# Assume the Dev role
+dev_role = sts_client.assume_role(
+    RoleArn='arn:aws:iam::888577057759:role/Dev',
+    RoleSessionName='DevSession'
+)
+
+# Use the assumed role credentials
+s3_dev = boto3.client(
+    's3',
+    aws_access_key_id=dev_role['Credentials']['AccessKeyId'],
+    aws_secret_access_key=dev_role['Credentials']['SecretAccessKey'],
+    aws_session_token=dev_role['Credentials']['SessionToken'],
+    region_name='us-west-2'
+)
+
+# Create an S3 bucket
+s3_dev.create_bucket(
+    Bucket='lecture1-liuzhang',
+    CreateBucketConfiguration={
+        'LocationConstraint': 'us-west-2'
+    }
+)
+
+# Upload files to the bucket
+s3_dev.put_object(Bucket='lecture1-liuzhang', Key='assignment1.txt', Body='Empty Assignment 1')
+s3_dev.put_object(Bucket='lecture1-liuzhang', Key='assignment2.txt', Body='Empty Assignment 2')
+
+# Upload an image
+with open('dog.jpeg', 'rb') as image:
+    s3_dev.put_object(Bucket='lecture1-liuzhang', Key='dog.jpeg', Body=image)
+
+# Update the trust policy of the 'User' role to allow 'TestIAMUser' to assume the role
+user_trust_policy_update = {
+    'Version': '2012-10-17',
+    'Statement': [
+        {
+            'Effect': 'Allow',
+            'Principal': {
+                'AWS': f'arn:aws:iam::888577057759:user/TestIAMUser'
+            },
+            'Action': 'sts:AssumeRole'
+        }
+    ]
+}
+
+iam.update_assume_role_policy(
+    RoleName='User',
+    PolicyDocument=json.dumps(user_trust_policy_update)
+)
+
+# Attach an inline policy to 'TestIAMUser' that allows assuming the 'User' role
+user_assume_role_policy = {
+    'Version': '2012-10-17',
+    'Statement': [
+        {
+            'Effect': 'Allow',
+            'Action': 'sts:AssumeRole',
+            'Resource': f'arn:aws:iam::888577057759:role/User'
+        }
+    ]
+}
+
+iam.put_user_policy(
+    UserName='TestIAMUser',
+    PolicyName='AllowAssumeUserRole',
+    PolicyDocument=json.dumps(user_assume_role_policy)
+)
+
+# Assume the User role
+user_role = sts_client.assume_role(
+    RoleArn='arn:aws:iam::888577057759:role/User',
+    RoleSessionName='UserSession'
+)
+
+# Use the assumed role credentials
+s3_user = boto3.client(
+    's3',
+    aws_access_key_id=user_role['Credentials']['AccessKeyId'],
+    aws_secret_access_key=user_role['Credentials']['SecretAccessKey'],
+    aws_session_token=user_role['Credentials']['SessionToken'],
+    region_name='us-west-2'
+)
+
+# Define the bucket name
+bucket_name = 'lecture1-liuzhang'
+
+# Initialize the total size counter
+total_size = 0
+
+# List all objects in the bucket with the prefix 'assignment'
+response = s3_user.list_objects_v2(Bucket=bucket_name, Prefix='assignment')
+
+# Check if the response contains 'Contents', which holds the list of objects
+if 'Contents' in response:
+    for obj in response['Contents']:
+        total_size += obj['Size']
+
+    # Print the total size of all objects with the prefix 'assignment'
+    print(f"Total size of objects with prefix 'assignment': {total_size} bytes")
+
+# Assume the Dev role
+dev_role = sts_client.assume_role(
+    RoleArn='arn:aws:iam::888577057759:role/Dev',
+    RoleSessionName='DevSession'
+)
+
+# Use the assumed Dev role credentials to create the S3 client
+s3_dev = boto3.client(
+    's3',
+    aws_access_key_id=dev_role['Credentials']['AccessKeyId'],
+    aws_secret_access_key=dev_role['Credentials']['SecretAccessKey'],
+    aws_session_token=dev_role['Credentials']['SessionToken'],
+    region_name='us-west-2'
+)
+
+# Define the bucket name
+bucket_name = 'lecture1-liuzhang'
+
+# List all objects in the bucket
+response = s3_dev.list_objects_v2(Bucket=bucket_name)
+
+# Check if there are any objects in the bucket
+if 'Contents' in response:
+    # Delete all objects in the bucket
+    for obj in response['Contents']:
+        print(f"Deleting object: {obj['Key']}")
+        s3_dev.delete_object(Bucket=bucket_name, Key=obj['Key'])
+
+# Confirm all objects have been deleted
+response = s3_dev.list_objects_v2(Bucket=bucket_name)
+if 'Contents' not in response:
+    print("All objects deleted successfully.")
+
+# Delete the bucket
+s3_dev.delete_bucket(Bucket=bucket_name)
+
+print(f"Bucket '{bucket_name}' has been deleted.")
