@@ -1,0 +1,52 @@
+import boto3
+import matplotlib.pyplot as plt
+from datetime import datetime, timedelta
+import json
+
+dynamodb = boto3.resource('dynamodb')
+s3 = boto3.client('s3')
+
+table_name = 'S3-object-size-history'
+bucket_name = 'testbucket-liuzhang'
+
+def lambda_handler(event, context):
+    # Define the time range
+    end_time = datetime.now()
+    start_time = end_time - timedelta(seconds=10)
+
+    # Scan items from DynamoDB
+    table = dynamodb.Table(table_name)
+    response = table.scan()
+    
+    timestamps = []
+    sizes = []
+
+    for item in response['Items']:
+        item_time = datetime.fromisoformat(item['timestamp'])
+        if start_time <= item_time <= end_time:
+            timestamps.append(item_time)
+            sizes.append(item['total_size'])
+
+    # Plotting
+    plt.figure(figsize=(10, 5))
+    plt.plot(timestamps, sizes, label='Bucket Size', marker='o')
+
+    # Retrieve max size
+    max_size = max(sizes) if sizes else 0
+    plt.axhline(y=max_size, color='r', linestyle='--', label='Max Size')
+
+    plt.xlabel('Time')
+    plt.ylabel('Size (bytes)')
+    plt.title('S3 Bucket Size Over Last 10 Seconds')
+    plt.legend()
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+
+    # Save plot to S3
+    plt.savefig('/tmp/plot.png')
+    s3.upload_file('/tmp/plot.png', bucket_name, 'plot.png')
+
+    return {
+        'statusCode': 200,
+        'body': json.dumps('Plot created and uploaded successfully')
+    }

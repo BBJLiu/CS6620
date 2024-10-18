@@ -1,0 +1,43 @@
+import boto3
+
+s3 = boto3.client('s3', region_name='us-west-1')
+dynamodb = boto3.resource('dynamodb', region_name='us-west-1')
+
+def create_s3_bucket(bucket_name):
+    try:
+        s3.create_bucket(Bucket=bucket_name, CreateBucketConfiguration={'LocationConstraint': 'us-west-1'})
+        print(f"S3 bucket '{bucket_name}' created successfully.")
+    except Exception as e:
+        print(f"Error creating S3 bucket: {e}")
+
+def create_dynamodb_table(table_name):
+    try:
+        table = dynamodb.create_table(
+            TableName=table_name,
+            KeySchema=[
+                {'AttributeName': 'bucket_name', 'KeyType': 'HASH'},
+                {'AttributeName': 'timestamp', 'KeyType': 'RANGE'}
+            ],
+            AttributeDefinitions=[
+                {'AttributeName': 'bucket_name', 'AttributeType': 'S'},
+                {'AttributeName': 'timestamp', 'AttributeType': 'S'}
+            ],
+            ProvisionedThroughput={
+                'ReadCapacityUnits': 5,
+                'WriteCapacityUnits': 5
+            }
+        )
+        table.meta.client.get_waiter('table_exists').wait(TableName=table_name)
+        print(f"DynamoDB table '{table_name}' created successfully.")
+    except Exception as e:
+        print(f"Error creating DynamoDB table: {e}")
+
+def main():
+    bucket_name = 'testbucket-liuzhang'  
+    table_name = 'S3-object-size-history'
+
+    create_s3_bucket(bucket_name)
+    create_dynamodb_table(table_name)
+
+if __name__ == '__main__':
+    main()
