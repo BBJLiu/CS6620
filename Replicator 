@@ -1,0 +1,60 @@
+import boto3
+import os
+from datetime import datetime
+from botocore.exceptions import ClientError
+
+dynamodb = boto3.resource('dynamodb')
+s3 = boto3.client('s3')
+table = dynamodb.Table(os.environ['TableT'])
+
+def handler(event, context):
+    # Parse event
+    bucket_src = os.environ['BUCKET_SRC']
+    object_key = event['Records'][0]['s3']['object']['key']
+    event_type = event['Records'][0]['eventName']
+
+    if event_type == 'PutObject':
+        # Handle PUT event
+        response = table.query(
+            KeyConditionExpression='OriginalObjectName = :val',
+            ExpressionAttributeValues={':val': object_key}
+        )
+        
+        if response['Items']:
+            # If copies exist, delete the oldest
+            oldest_copy = sorted(response['Items'], key=lambda x: x['CopyTimestamp'])[0]
+            delete_oldest_copy(oldest_copy['CopyObjectName'])
+            table.delete_item(
+                Key={
+                    'OriginalObjectName': object_key,
+                    'CopyTimestamp': oldest_copy['CopyTimestamp']
+                }
+            )
+
+        # Create a new copy in Bucket Dst
+        copy_object_name = f"{object_key}_copy_{datetime.utcnow().isoformat()}"
+        s3.copy_object(
+            Bucket=os.environ['BUCKET_DST'],
+            CopySource={'Bucket': bucket_src, 'Key': object_key},
+            Key=copy_object_name
+        )
+
+        # Update Table T
+        table.put_item(Item={
+            'OriginalObjectName': object_key,
+            'CopyTimestamp': datetime.utcnow().isoformat(),
+            'CopyObjectName': copy_object_name,
+            'IsDisowned': False,
+            'DisownedTimestamp': None
+        })
+
+    elif event_type == 'DeleteObject':
+        # Handle DELETE event
+        table.update_item(
+            Key={'OriginalObjectName': object_key},
+            UpdateExpression="SET IsDisowned = :val, DisownedTimestamp = :ts",
+            ExpressionAttributeValues={':val': True, ':ts': datetime.utcnow().isoformat()}
+        )
+
+def delete_oldest_copy(copy_object_name):
+    s3.delete_object(Bucket=os.environ['BUCKET_DST'], Key=copy_object_name)

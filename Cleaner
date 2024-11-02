@@ -1,0 +1,30 @@
+import boto3
+import os
+from datetime import datetime, timedelta
+
+dynamodb = boto3.resource('dynamodb')
+s3 = boto3.client('s3')
+table = dynamodb.Table(os.environ['TableT'])
+
+def handler(event, context):
+    current_time = datetime.utcnow()
+
+    # Query for disowned copies older than 10 seconds
+    response = table.scan(
+        FilterExpression='IsDisowned = :val',
+        ExpressionAttributeValues={':val': True}
+    )
+
+    for item in response['Items']:
+        disowned_time = datetime.fromisoformat(item['DisownedTimestamp'])
+        if (current_time - disowned_time).total_seconds() > 10:
+            # Delete the copy from Bucket Dst
+            s3.delete_object(Bucket=os.environ['BUCKET_DST'], Key=item['CopyObjectName'])
+            # Optionally, remove from Table T or mark as deleted
+            table.delete_item(
+                Key={
+                    'OriginalObjectName': item['OriginalObjectName'],
+                    'CopyTimestamp': item['CopyTimestamp']
+                }
+            )
+
