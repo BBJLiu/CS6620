@@ -21,7 +21,7 @@ class CloudComputingAssignment3Stack(Stack):
         s3_bucket = s3.Bucket(
             self,
             "TestBucket",
-            bucket_name="weihao-cdk-bucket",  # Updated unique name
+            bucket_name="liuzhang-cdk-bucket",  # Updated unique name
             removal_policy=RemovalPolicy.DESTROY 
         )
 
