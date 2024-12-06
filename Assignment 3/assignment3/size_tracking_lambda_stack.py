@@ -27,7 +27,7 @@ class SizeTrackingLambdaStack(Stack):
         size_tracking_queue = sqs.Queue.from_queue_arn(
             self,
             "ImportedSizeTrackingQueue",
-            queue_arn="arn:aws:sqs:us-east-1:941377123459:CloudComputingAssignment3Stack-SizeTrackingQueue7EE021D2-021aYRklUUDL"  # Replace with actual ARN
+            queue_arn="arn:aws:lambda:us-west-1:888577057759:function:size-Tracking" 
         )
 
         # Define the Lambda function
