@@ -25,14 +25,14 @@ class PlottingLambdaStack(Stack):
         s3_bucket = s3.Bucket.from_bucket_name(
             self,
             "ImportedS3Bucket",
-            bucket_name="weihao-cdk-bucket"
+            bucket_name="liuzhang-cdk-bucket"
         )
 
         # Use an existing Matplotlib Layer by specifying the ARN
         matplotlib_layer = _lambda.LayerVersion.from_layer_version_arn(
             self,
             "MatplotlibLayer",
-            layer_version_arn="arn:aws:lambda:us-east-1:770693421928:layer:Klayers-p39-matplotlib:1"
+            layer_version_arn="arn:aws:lambda:us-west-1:888577057759:function:plotting“
         )
 
         # Define the Plotting Lambda function with the layer
