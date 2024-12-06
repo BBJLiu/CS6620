@@ -78,7 +78,7 @@ class LoggingLambdaStack(Stack):
         queue = sqs.Queue.from_queue_arn(
             self,
             "LoggingQueue",
-            queue_arn="arn:aws:sqs:us-east-1:941377123459:CloudComputingAssignment3Stack-LoggingQueue2008486F-AW1iGaSKytMA"
+            queue_arn="arn:aws:apigateway:us-west-1::/apis/53fgfqejea"
         )
 
         # Grant the Lambda function permissions to read from the SQS queue
