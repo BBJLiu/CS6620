@@ -23,7 +23,7 @@ class CleanerLambdaStack(Stack):
             code=_lambda.Code.from_asset("lambda/cleaner_lambda"),  # Adjust the path as needed
         )
 
-        bucket = s3.Bucket.from_bucket_name(self, "MyBucket", "weihao-cdk-bucket")
+        bucket = s3.Bucket.from_bucket_name(self, "MyBucket", "liuzhang-cdk-bucket")
 
 
         # Grant permissions to the Cleaner Lambda to access the S3 bucket
