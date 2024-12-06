@@ -18,7 +18,7 @@ class DriverLambdaStack(Stack):
         s3_bucket = s3.Bucket.from_bucket_name(
             self,
             "ImportedS3Bucket",
-            bucket_name="weihao-cdk-bucket"
+            bucket_name="liuzhang-cdk-bucket"
         )
 
         # Define Requests Layer for external HTTP requests
